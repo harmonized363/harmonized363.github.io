@@ -61,6 +61,23 @@
 
         const brandStats = {};
         const timestamps = new Set();
+        const totalResponsesPerModel = { qwen: 0, deepseek: 0, gemini: 0 };
+
+        // First pass: count total responses per model
+        rawData.forEach(record => {
+          const fields = record.fields;
+          const timestamp = fields.Timestamp;
+          
+          if (!timestamps.has(timestamp)) {
+            timestamps.add(timestamp);
+            if (fields.Qwen) totalResponsesPerModel.qwen++;
+            if (fields.Deepseek) totalResponsesPerModel.deepseek++;
+            if (fields.Gemini) totalResponsesPerModel.gemini++;
+          }
+        });
+
+        // Reset timestamps for second pass
+        timestamps.clear();
 
         // Process each record
         rawData.forEach(record => {
@@ -97,6 +114,8 @@
 
         // Calculate averages and percentages
         const results = [];
+        const totalOverallResponses = totalResponsesPerModel.qwen + totalResponsesPerModel.deepseek + totalResponsesPerModel.gemini;
+
         Object.keys(brandStats).forEach(brand => {
           const stats = brandStats[brand];
 
@@ -105,9 +124,9 @@
             return ranks.length > 0 ? ranks.reduce((a, b) => a + b, 0) / ranks.length : null;
           };
 
-          const top5Pct = (key) => {
-            const total = stats[key].total;
-            return total > 0 ? (stats[key].top5 / total) * 100 : null;
+          const top5Pct = (key, totalResponses) => {
+            // Count all responses (including N/A as not in top 5)
+            return (stats[key].top5 / totalResponses) * 100;
           };
 
           results.push({
@@ -116,7 +135,7 @@
             deepseekRank: avgRank('deepseek'),
             geminiRank: avgRank('gemini'),
             overallRank: avgRank('overall'),
-            overallTop5: top5Pct('overall')
+            overallTop5: top5Pct('overall', totalOverallResponses)
           });
         });
 
@@ -162,7 +181,7 @@
       };
 
       const formatPercentage = (value) => {
-        return value !== null ? value.toFixed(1) + '%' : 'N/A';
+        return value !== null ? value.toFixed(1) + '%' : '0.0%';
       };
 
       const exportToCSV = () => {
@@ -173,7 +192,7 @@
           row.deepseekRank !== null ? row.deepseekRank.toFixed(2) : 'N/A',
           row.geminiRank !== null ? row.geminiRank.toFixed(2) : 'N/A',
           row.overallRank !== null ? row.overallRank.toFixed(2) : 'N/A',
-          row.overallTop5 !== null ? row.overallTop5.toFixed(1) + '%' : 'N/A'
+          row.overallTop5 !== null ? row.overallTop5.toFixed(1) + '%' : '0.0%'
         ]);
 
         const csvContent = [
@@ -243,7 +262,7 @@
                     BRAND RANKINGS
                   </h2>
                   <p className="text-sm text-gray-600 mt-1 font-semibold">
-                    Lower rank = better position | Top 5 % = percentage of times brand appeared in top 5 overall | Click column headers to sort
+                    Lower rank = better position | Top 5 % includes N/A as 0 (not in top 5) | Click column headers to sort
                   </p>
                 </div>
                 <button
@@ -349,10 +368,10 @@
                 <div className="bg-blue-50 p-4 border-l-2" style={{ borderLeftColor: '#003478' }}>
                   <div className="font-black text-gray-700" style={{ fontFamily: 'Arial Black, sans-serif' }}>HIGHEST TOP 5 %</div>
                   <div className="text-2xl font-black mt-1" style={{ fontFamily: 'Arial Black, sans-serif', color: '#003478' }}>
-                    {sortedData.length > 0 ? [...sortedData].filter(d => d.overallTop5 !== null).sort((a, b) => b.overallTop5 - a.overallTop5)[0]?.brand || '-' : '-'}
+                    {sortedData.length > 0 ? [...sortedData].sort((a, b) => b.overallTop5 - a.overallTop5)[0]?.brand || '-' : '-'}
                   </div>
                   <div className="text-xs text-gray-600 mt-1">
-                    {sortedData.length > 0 && [...sortedData].filter(d => d.overallTop5 !== null).length > 0 ? `${[...sortedData].filter(d => d.overallTop5 !== null).sort((a, b) => b.overallTop5 - a.overallTop5)[0].overallTop5.toFixed(1)}% in top 5` : 'No data'}
+                    {sortedData.length > 0 ? `${[...sortedData].sort((a, b) => b.overallTop5 - a.overallTop5)[0].overallTop5.toFixed(1)}% in top 5` : 'No data'}
                   </div>
                 </div>
                 <div className="bg-blue-50 p-4 border-l-2" style={{ borderLeftColor: '#003478' }}>
@@ -377,3 +396,4 @@
     root.render(<SimpleLLMDashboard />);
   </script>
 </body>
+</html>
